@@ -1,38 +1,132 @@
-import { connect } from "@planetscale/database";
+import { withContent, ThrowableRouter, } from 'itty-router-extras';
+
+import { createResponse, decideAction } from './ai';
+import { getTweet, updateReplied, addLog, getProfiles, updateReplyTime } from './database.js';
+import { getConversation, postTweet, likeTweet, retweet, getTimeline, followUser} from './twitter';
 
 
-// Creates a PlanetScale connection object and returns it
-function getPlanetScaleConnection(env) {
-	const config = {
-	  host: env.DATABASE_HOST,
-	  username: env.DATABASE_USERNAME,
-	  password: env.DATABASE_PASSWORD,
-	  fetch: (url, init) => {
-		delete (init)["cache"];
-		return fetch(url, init);
-	  }
-	}
-	return connect(config)
+const router = ThrowableRouter()
+
+router.get("/", async ({}, env) => {
+  return startBot(env);
+})
+
+async function startBot(env){
+  let profiles = await getProfiles(env);
+  // Variable for storing each profile response
+  let getRequestResponse = "";
+  // For each profile run the bot
+  for (let profile of profiles) {
+    let today = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    // If the paidUntil date after today, run the bot
+    if (profile.paidUntil > today) {
+      // Check if replyTime is equal to currentReplyTime, if so run the bot
+      if (profile.replyTime == profile.currentReplyTime) {
+        console.log("Running for profile: " + profile.name + "\n")
+        getRequestResponse += await runDoug(env, profile);
+      }
+      else {
+        console.log("Skipping profile based on replyTime: " + profile.name + "\n")
+        getRequestResponse += "Skipping profile: " + profile.name + "\n";
+      }
+    }
+    else {
+      console.log("Skipping profile: " + profile.name + "\n")
+      getRequestResponse += "Skipping profile: " + profile.name + "\n";
+    }
+    await updateReplyTime(env, profile);
+  }
+  return new Response(JSON.stringify(getRequestResponse), {
+    status: 200,
+    headers: {
+      "content-type": "application/json;charset=UTF-8",
+    },
+  });
+}
+
+async function runDoug(env, profile){
+  let getRequestResponse = "";
+  let conversation = "";
+  let commandList = ['Z'];
+  let tweetId = "";
+  let tweet = null;
+  try {
+    const query = profile.name;
+    tweet = await getTweet(env, query);
+    tweetId = tweet ? tweet.tweet_id : await getTimeline(env, profile.session);
+
+    conversation = await getConversation(env, tweetId, profile.session);
+
+    commandList = (await decideAction(env, conversation, profile)).match(/\[(.*?)\]/g)[0].split(",").map(item => item.replace(/[\[\]']+/g, '').trim());
+
+    console.log(commandList);
+  } catch (e) {
+    console.log(e);
+    getRequestResponse += `Error in ${tweet ? 'getting conversation' : 'generating reply'}\n`;
   }
 
-//   Function to return the oldest notification from the notifications table that has an actioned value of false AND a notification_for value of the query
-async function handleScheduled(env, query) {
-	const conn = getPlanetScaleConnection(env);
-	try {
-	  const { results } = await conn.query(
-		`SELECT * FROM notifications WHERE actioned = false AND notification_for = '${query}' ORDER BY created_at ASC LIMIT 1`
-	  );
-	  return results;
-	} catch (error) {
-	  console.error(error);
-	  throw error;
-	} finally {
-	  await conn.end();
-	}
+  try {
+    const tweetText = conversation[conversation.length - 1];
+    const log = await addLog(env, tweetId, commandList, tweetText, profile.name);
+    if (log) {
+      getRequestResponse += "Log: " + log + "\n";
+      // If the log is successfully added, for each entry in the command list, call the appropriate function
+      for (let command of commandList) {
+          if (command == "A") {
+              console.log("Like");
+              await likeTweet(env, tweetId, profile.session);
+          }
+          else if (command == "B") {
+              console.log("Retweet");
+              await retweet(env, tweetId, profile.session);
+          }
+          else if (command == "C") {
+              console.log("Reply");
+              let twitterReply = await createResponse(env, conversation, profile);
+              console.log(twitterReply);
+              await postTweet(env, twitterReply, tweetId, profile.session);
+          }
+          else if (command == "D") {
+              console.log("Follow");
+              // Split the tweet text and take the section before th : as the username
+              let username = tweetText.split(":")[0];
+              await followUser(env, username, profile.session);
+          }
 
+          else {
+              console.log("Ignoring command: " + command);
+          }
+      }
+    }
+    else{
+      await updateReplied(env, tweetId);
+      return "Already replied"
+    }
+} catch (e) {
+    console.log(e);
+    getRequestResponse += e.message.includes('addLog') ? "Error in adding log\n" : `Error in command: ${command}\n`;
 }
-// Export a default object containing event handlers
+
+try {
+    const updated = await updateReplied(env, tweetId);
+    getRequestResponse += "Updated: " + updated + "\n";
+} catch (e) {
+    console.log(e);
+    getRequestResponse += "Error in updating replied status\n";
+}
+  
+  return getRequestResponse;
+}
+
+async function handledScheduled(event, env, ctx) {
+  return startBot(env);
+}
+
+
+// Catchall
+router.all("*", () => new Response("404, not found!", { status: 404 }))
+
 export default {
-	fetch: handleScheduled,
-	scheduled: handleScheduled
-};
+    fetch: router.handle,
+    scheduled: handledScheduled
+}

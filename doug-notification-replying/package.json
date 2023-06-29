@@ -13,6 +13,8 @@
     "wrangler": "^3.0.0"
   },
   "dependencies": {
-    "@planetscale/database": "^1.7.0"
+    "@planetscale/database": "^1.7.0",
+    "itty-router-extras": "^0.4.5",
+    "langchain": "^0.0.96"
   }
 }

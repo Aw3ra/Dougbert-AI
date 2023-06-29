@@ -20,7 +20,7 @@ function getPlanetScaleConnection(env) {
 // Get all notifications
 router.get("/", async ({}, env) => {
 	const conn = getPlanetScaleConnection(env)
-	const data = await conn.execute('SELECT * FROM logs ORDER BY timeStamp DESC LIMIT 50');
+	const data = await conn.execute('SELECT * FROM logs WHERE twitterName = "DougbertAI" ORDER BY timeStamp DESC LIMIT 50');
 	return new Response(JSON.stringify(data.rows), {
 		status: 200,
 		headers: {

@@ -1,5 +1,5 @@
 name = "doug-notification-replying"
-main = "src/worker.ts"
+main = "src/index.js"
 compatibility_date = "2023-06-21"
 
 # # KV Namespace binding - For more information: https://developers.cloudflare.com/workers/runtime-apis/kv
@@ -33,8 +33,14 @@ compatibility_date = "2023-06-21"
 # [env.production]
 # MY_VARIABLE = "production_value"
 
+# [env.dev]
+# OPENAI_API_KEY="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"
+
 # [env.staging]
 # MY_VARIABLE = "staging_value"
 
 # [env.shared]
 # SHARED_VARIABLE = "shared_value"
+
+[triggers]
+crons = ["*/5 * * * *"]
