@@ -19,7 +19,7 @@ function getPlanetScaleConnection(env) {
   
 // Function to fetch tweets using rapid API
 async function searchNotifications(env, query='dougbertai') {
-	const url = `https://twttrapi.p.rapidapi.com/search-users?query=${query}`;
+	const url = `https://twttrapi.p.rapidapi.com/search-latest?query=${query}`;
 	const rapidApiKey = env.RAPIDAPI_KEY;
 	const session = env.SESSION;
 	const twitterId = '1610746366682361856';
@@ -34,17 +34,17 @@ async function searchNotifications(env, query='dougbertai') {
 	  const response = await fetch(url, { headers });
 	  const data = await response.json();
   
-	  const tweets = data.globalObjects.tweets;
-	  console.log(tweets);
+	  const tweets = data.data.search.timeline_response.timeline.instructions[0].entries;
 	  const newNotifications = Object.values(tweets)
+	  .filter((tweet) => tweet.entryId.includes('tweet-'))
 	  .filter((tweet) => {
-		return !tweet.scopes && !(tweet.retweeted_status_id_str || tweet.user_id_str === twitterId)
+		return !tweet.scopes && !(tweet.content.content.tweetResult.result.core.user_result.result.legacy.retweeted || tweet.content.content.tweetResult.result.core.user_result.result.legacy.id_str === twitterId)
 	  })
 	  .map((tweet) => ({
-		tweet_id: tweet.id_str,
-		author_id: tweet.user_id,
-		created_at: new Date(tweet.created_at),
-		content: tweet.full_text,
+		tweet_id: tweet.entryId.split('-')[1],
+		author_id: tweet.content.content.tweetResult.result.core.user_result.result.legacy.id_str,
+		created_at: new Date(tweet.content.content.tweetResult.result.legacy.created_at),
+		content: tweet.content.content.tweetResult.result.legacy.full_text,
 		actioned: false,
 		notification_for: query
 	  }));
