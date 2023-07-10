@@ -18,11 +18,12 @@ function getPlanetScaleConnection(env) {
   }
   
 // Function to fetch tweets using rapid API
-async function searchNotifications(env, query='dougbertai') {
-	const url = `https://twttrapi.p.rapidapi.com/search-latest?query=${query}`;
+async function searchNotifications(env, profile) {
+	const url = `https://twttrapi.p.rapidapi.com/search-latest?query=${profile.name}`;
 	const rapidApiKey = env.RAPIDAPI_KEY;
 	const session = env.SESSION;
-	const twitterId = '1610746366682361856';
+	const twitterId = profile.twitterId;
+	// const twitterId = ;
   
 	const headers = {
 	  'twttr-session': session,
@@ -46,7 +47,7 @@ async function searchNotifications(env, query='dougbertai') {
 		created_at: new Date(tweet.content.content.tweetResult.result.legacy.created_at),
 		content: tweet.content.content.tweetResult.result.legacy.full_text,
 		actioned: false,
-		notification_for: query
+		notification_for: profile.name,
 	  }));
 	  console.log(newNotifications);
   
@@ -92,7 +93,17 @@ router.post("/", withContent, async (request, env) => {
 
 //   Get all notifications
 router.get("/", async ({}, env) => {
-	await searchNotifications(env)
+	const profiles = await getProfiles(env)
+	const tweets = [];
+	for (let profile of profiles) {
+		if (profile.paidUntil <= new Date()) {
+			console.log('Profile is expired');
+			continue;
+		  }
+			const newNotifications = await searchNotifications(env, profile);																	
+			tweets.push(...newNotifications);
+		}
+	console.log(tweets);
 	// const conn = getPlanetScaleConnection(env)
 	// const data = await conn.execute('SELECT * FROM logs');
 	// return new Response(JSON.stringify(data.rows), {
@@ -115,7 +126,7 @@ async function handleScheduled(event, env, ctx) {
 		if (profile.paidUntil <= new Date()) {
 			continue;
 		  }
-			const newNotifications = await searchNotifications(env, profile.name);																	
+			const newNotifications = await searchNotifications(env, profile);																	
 			tweets.push(...newNotifications);
 		}
 	const conn = getPlanetScaleConnection(env)
@@ -142,7 +153,6 @@ async function handleScheduled(event, env, ctx) {
 		}
 	  }
 	}
-	console.log(data);
   };
 
 

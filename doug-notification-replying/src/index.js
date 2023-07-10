@@ -17,24 +17,31 @@ async function startBot(env){
   let getRequestResponse = "";
   // For each profile run the bot
   for (let profile of profiles) {
-    let today = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    // If the paidUntil date after today, run the bot
-    if (profile.paidUntil > today) {
-      // Check if replyTime is equal to currentReplyTime, if so run the bot
-      if (profile.replyTime == profile.currentReplyTime) {
-        console.log("Running for profile: " + profile.name + "\n")
-        getRequestResponse += await runDoug(env, profile);
-      }
-      else {
-        console.log("Skipping profile based on replyTime: " + profile.name + "\n")
-        getRequestResponse += "Skipping profile: " + profile.name + "\n";
-      }
+    try{
+        let today = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        // If the paidUntil date after today, run the bot
+        if (profile.paidUntil > today) {
+          // Check if replyTime is equal to currentReplyTime, if so run the bot
+          if (profile.replyTime == profile.currentReplyTime) {
+            console.log("Running for profile: " + profile.name + "\n")
+            getRequestResponse += await runDoug(env, profile);
+          }
+          else {
+            console.log("Skipping profile based on replyTime: " + profile.name + "\n")
+            getRequestResponse += "Skipping profile: " + profile.name + "\n";
+          }
+        }
+        else {
+          console.log("Skipping profile: " + profile.name + "\n")
+          getRequestResponse += "Skipping profile: " + profile.name + "\n";
+        }
+        await updateReplyTime(env, profile);
     }
-    else {
-      console.log("Skipping profile: " + profile.name + "\n")
-      getRequestResponse += "Skipping profile: " + profile.name + "\n";
+    catch(e){
+      console.log(e);
+      getRequestResponse += "Error in profile: " + profile.name + "\n";
     }
-    await updateReplyTime(env, profile);
+
   }
   return new Response(JSON.stringify(getRequestResponse), {
     status: 200,

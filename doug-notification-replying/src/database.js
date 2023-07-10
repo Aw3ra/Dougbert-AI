@@ -106,7 +106,7 @@ export async function getProfiles(env) {
 export async function updateReplyTime (env, profile) {
 	const conn = await connectToPlanetScale(env);
 	// If replyTime and currentReplyTime are the same, reset currentReplyTime to 0
-	if (profile.replyTime == profile.currentReplyTime) {
+	if (profile.currentReplyTime >= profile.replyTime) {
 		const data = await conn.execute
 		(
 			`UPDATE profiles
